@@ -1,3 +1,5 @@
+import datetime
+
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .models import Author, Book, Member, Loan
@@ -14,6 +16,19 @@ class BookViewSet(viewsets.ModelViewSet):
     queryset = Book.objects.all()
     serializer_class = BookSerializer
 
+    def get_queryset(self):
+        id = self.kwargs.get('pk', None)
+        if id:
+            return Book.objects.filter(id=id)
+
+        return Book.objects.all()
+
+    @action(detail=True, methods=['get'])
+    def get_books(self, request, pk=None):
+        books = Book.objects.filter(author=pk)
+        serializer = BookSerializer(books, many=True)
+        return Response(serializer.data)
+    
     @action(detail=True, methods=['post'])
     def loan(self, request, pk=None):
         book = self.get_object()
@@ -49,6 +64,25 @@ class MemberViewSet(viewsets.ModelViewSet):
     queryset = Member.objects.all()
     serializer_class = MemberSerializer
 
+
 class LoanViewSet(viewsets.ModelViewSet):
     queryset = Loan.objects.all()
     serializer_class = LoanSerializer
+
+    @action(detail=True, methods=['post'])
+    def extend_due_date(self, request, pk=None):
+        loan = self.get_object()
+
+        additional_days = int(request.data.get('additional_days'))
+        if additional_days <=0 :
+             return Response({'error': 'Invalid Additional Days'}, status=status.HTTP_400_BAD_REQUEST)
+        if loan.is_returned:
+            return Response({'error': 'Loan already returned'}, status=status.HTTP_400_BAD_REQUEST)
+        if loan.due_date < datetime.date.today():
+            return Response({'error': 'Due date is already expired'}, status=status.HTTP_400_BAD_REQUEST)
+
+        loan.due_date = loan.due_date + datetime.timedelta(days=additional_days)
+        loan.save()
+        return Response(data=LoanSerializer(loan).data)
+
+        

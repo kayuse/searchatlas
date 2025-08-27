@@ -1,3 +1,5 @@
+from datetime import timezone, datetime
+
 from celery import shared_task
 from .models import Loan
 from django.core.mail import send_mail
@@ -18,3 +20,17 @@ def send_loan_notification(loan_id):
         )
     except Loan.DoesNotExist:
         pass
+
+@shared_task
+def check_overdue_loans(loan_id):
+    due_loans = Loan.objects.filter(is_returned=False, due_date__lte=datetime.today())
+    for loan in due_loans:
+        member_email = loan.member.user.email
+        book_title = loan.book.title
+        send_mail(
+            subject='Loan Reminder',
+            message=f'Hello {loan.member.user.username},\n\nYou have a pending "{book_title}".\n book loan Please return it immediately.',
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[member_email],
+            fail_silently=False,
+        )
